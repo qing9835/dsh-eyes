@@ -1,6 +1,14 @@
 # dsh-eyes —— 给 DeepSeek 外置视觉模型，鲸鱼开眼 👁️
 
 <p align="center">
+  <img src="https://img.shields.io/badge/DSH-插件-blue" alt="DSH 插件">
+  <img src="https://img.shields.io/badge/图片识别-视觉桥-brightgreen" alt="图片识别">
+  <img src="https://img.shields.io/badge/OpenAI%20兼容-API-orange" alt="OpenAI 兼容">
+  <img src="https://img.shields.io/badge/多模型-OpenCode%2FModelScope-purple" alt="多模型">
+  <img src="https://img.shields.io/badge/开源-MIT-green" alt="MIT License">
+</p>
+
+<p align="center">
   <img src="demo/00-main-interface.png" alt="dsh-eyes 在 DeepSeek Harness 中的集成界面" width="820">
   <br>
   <em>在 DeepSeek Harness 中：同时上传 6 张图片，回车即可识别并自动发送进对话</em>
