@@ -28,8 +28,17 @@ dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 
 - 本包无构建步骤（index.js / client.js 均为成品），Git 安装无需 `allowBuilds` 授权；
 - 建议钉住 tag/SHA（如上 `#v0.1.0`），不要裸 `#main`；
-- 装完重启 DSH 自动生效（或把 `cordis.patch.yml` 里的行加入 `$DSH_HOME/cordis.patch.yml` 热激活）；
+- 装完**重启 DSH** 自动生效，然后刷新浏览器页面；
+- 插件行由 bundle 自带（`cordis.patch.yml`），**不要**再往 `$DSH_HOME/cordis.patch.yml` 加同名行，否则冷启动报 `duplicate loader entry id: vision-bridge`；
 - 首次使用请在配置弹窗填写自己的 API Key（默认无密钥）。
+
+**卸载：**
+
+```sh
+dsh plugin --profile web remove dsh-vision-bridge
+```
+
+> 注意：包名是 `dsh-vision-bridge`（GitHub 仓库名才是 `dsh-eyes`），卸载/安装都使用包名。卸载后重启 DSH 生效。
 
 **本地安装（开发）：**
 
@@ -37,15 +46,7 @@ dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 dsh plugin --profile web add ./dsh-vision-bridge
 ```
 
-装完后该 bundle 进入 web profile 的 `dsh.profile.bundles`，下次启动自动生效。运行时热激活：把以下行加入 `$DSH_HOME/cordis.patch.yml`（home 层会被监听并事务性重放）：
-
-```yaml
-- insert:
-    - id: vision-bridge
-      name: dsh-vision-bridge
-```
-
-浏览器侧生效需刷新页面（`window.__DSH_BOOT__` 由 host 重新注入）。
+装完后该 bundle 进入 web profile 的 `dsh.profile.bundles`，重启 DSH 自动生效（bundle 列表变更不会热重放，必须重启进程），浏览器侧再刷新页面（`window.__DSH_BOOT__` 由 host 重新注入）。
 
 ## 数据（磁盘持久化，与动态版共用）
 
