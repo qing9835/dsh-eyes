@@ -56,6 +56,18 @@ dsh plugin --profile web add ./dsh-vision-bridge
 - ModelScope：`https://api-inference.modelscope.cn/v1` — Qwen/Qwen3.5-397B-A17B、Qwen/Qwen3-VL-235B-A22B-Instruct、Qwen/Qwen3.5-122B-A10B（Key `ms-` 前缀自动去除）
 - 自定义：任意 OpenAI 兼容端点
 
+## 演示
+
+完整演示流程（`demo/` 目录，点击查看大图）：
+
+| 步骤 | 图片 |
+| --- | --- |
+| 1. 演示原图（古风女子雪景摄影） | ![demo-1](demo/01-source-photo.png) |
+| 2. 上传图片到 DSH 输入区 | ![demo-2](demo/02-upload-interface.png) |
+| 3. 配置弹窗（OpenAI 兼容接口） | ![demo-3](demo/03-config-dialog.png) |
+| 4. 识别结果自动发送进对话 | ![demo-4](demo/04-recognition-result.png) |
+| 5. 主模型通过 `vision_ask` 多轮追问细节 | ![demo-5](demo/05-vision-ask-followup.png) |
+
 ## 重建 client.js
 
 client.js 为手构建产物（无构建链）。修改客户端代码后，保持文件结构：
