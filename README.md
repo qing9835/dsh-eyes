@@ -31,8 +31,14 @@ DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识�
 **从 GitHub 一键安装（推荐，公开仓库）：**
 
 ```sh
+# 方式一：npx 直接跑（本机没装 DSH 也行，自动从 npm 拉取 CLI）
+npx @deepseek-ai/dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
+
+# 方式二：本机已装 DSH（全局命令，或在 DSH 源码目录里用 pnpm dsh）
 dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 ```
+
+两种写法是同一个 CLI，任选其一即可。
 
 - 本包无构建步骤（index.js / client.js 均为成品），Git 安装无需 `allowBuilds` 授权；
 - 建议钉住 tag/SHA（如上 `#v0.1.0`），不要裸 `#main`；
@@ -43,6 +49,8 @@ dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 **卸载：**
 
 ```sh
+# 方式一：npx；方式二：已装 DSH 的本机命令（同一个 CLI）
+npx @deepseek-ai/dsh plugin --profile web remove dsh-vision-bridge
 dsh plugin --profile web remove dsh-vision-bridge
 ```
 
@@ -51,6 +59,7 @@ dsh plugin --profile web remove dsh-vision-bridge
 **本地安装（开发）：**
 
 ```sh
+npx @deepseek-ai/dsh plugin --profile web add ./dsh-vision-bridge
 dsh plugin --profile web add ./dsh-vision-bridge
 ```
 
