@@ -1,7 +1,7 @@
-# dsh-vision-bridge，给deepseek外置视觉模型，鲸鱼开眼
+# dsh-eyes —— 给 DeepSeek 外置视觉模型，鲸鱼开眼 👁️
 
 <p align="center">
-  <img src="demo/00-main-interface.png" alt="dsh-vision-bridge 在 DeepSeek Harness 中的集成界面" width="820">
+  <img src="demo/00-main-interface.png" alt="dsh-eyes 在 DeepSeek Harness 中的集成界面" width="820">
   <br>
   <em>在 DeepSeek Harness 中：同时上传 6 张图片，回车即可识别并自动发送进对话</em>
 </p>
@@ -23,7 +23,7 @@ DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识�
 **从 GitHub 一键安装（推荐，公开仓库）：**
 
 ```sh
-dsh plugin --profile web add github:qing9835/dsh-vision-bridge#v0.1.0
+dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 ```
 
 - 本包无构建步骤（index.js / client.js 均为成品），Git 安装无需 `allowBuilds` 授权；
