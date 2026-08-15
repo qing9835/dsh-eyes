@@ -288,7 +288,7 @@ export function apply(ctx) {
           ],
         }],
         stream: false,
-        max_tokens: 256,
+        max_tokens: 4096,
       })
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) }
@@ -309,10 +309,26 @@ export function apply(ctx) {
     }
     let json = null
     try { json = JSON.parse(envelope.text) } catch (e) { json = null }
-    const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content
+    const choice = json && json.choices && json.choices[0]
+    const msg = choice && choice.message
+    let content = msg && msg.content
+    // 兼容 content 为数组（多模态输出）的网关：拼接其中的 text 片段
+    if (Array.isArray(content)) {
+      content = content.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('\n')
+    }
     if (typeof content !== 'string' || content.length === 0) {
       const apiErr = json && json.error && json.error.message ? ' — ' + json.error.message : ''
-      return { ok: false, error: '连接成功但模型未返回内容（接口返回空响应，请重试）' + apiErr }
+      if (!choice) {
+        return { ok: false, error: '接口返回空响应（choices 为空）：该模型/网关可能不支持图片输入，或返回格式不是 OpenAI 兼容的 chat/completions' + apiErr }
+      }
+      const reason = choice.finish_reason || 'unknown'
+      if (reason === 'length') {
+        return { ok: false, error: '模型输出被截断（finish_reason: length）：思考/输出超出 token 预算，请确认模型支持图片，或提高输出上限' + apiErr }
+      }
+      if (msg && typeof msg.reasoning_content === 'string' && msg.reasoning_content.length > 0) {
+        return { ok: false, error: '模型只返回了思考过程（reasoning_content）未输出回答：该模型可能是纯文本思考模型，不支持图片输入' + apiErr }
+      }
+      return { ok: false, error: '连接成功但模型未返回内容（finish_reason: ' + reason + '）：请确认该模型支持图片输入，或检查网关返回格式' + apiErr }
     }
     return { ok: true, model, latencyMs, note: '连接成功，模型可正常识别图片（耗时 ' + latencyMs + ' ms）' }
   }
