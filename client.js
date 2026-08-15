@@ -323,10 +323,20 @@ function ConfigDialog() {
           const providers = (r && r.providers) || []
           const keys = (r && r.keys) || {}
           const compatNote = (r && r.compatNote) || ''
+          const customs = (r && r.customProviders) || []
           const matched = providers.find(p => p.baseUrl === cfg.baseUrl) || null
-          setView({ providers, keys, compatNote })
-          setForm({
+          const matchedCustom = customs.find(c => 'custom-' + c.id === cfg.provider) || null
+          setView({ providers, keys, compatNote, customs })
+          setForm(matchedCustom ? {
+            provider: 'custom-' + matchedCustom.id,
+            label: matchedCustom.label || '自定义模型',
+            baseUrl: matchedCustom.baseUrl || '',
+            model: matchedCustom.model || '',
+            apiKey: matchedCustom.apiKey || cfg.apiKey || '',
+            systemPrompt: matchedCustom.systemPrompt || cfg.systemPrompt || '',
+          } : {
             provider: matched ? matched.id : 'custom',
+            label: '',
             baseUrl: cfg.baseUrl || '',
             model: cfg.model || '',
             apiKey: (matched && keys[matched.id]) || cfg.apiKey || '',
@@ -334,8 +344,8 @@ function ConfigDialog() {
           })
         })
         .catch(() => {
-          setView({ providers: [], keys: {}, compatNote: '' })
-          setForm({ provider: 'custom', baseUrl: '', model: '', apiKey: '', systemPrompt: '' })
+          setView({ providers: [], keys: {}, compatNote: '', customs: [] })
+          setForm({ provider: 'custom', label: '', baseUrl: '', model: '', apiKey: '', systemPrompt: '' })
         })
     }
   }, [store.configOpen, view])
@@ -347,19 +357,38 @@ function ConfigDialog() {
     store.configOpen = false
     notify()
   }
+  const isCustomEntry = typeof form.provider === 'string' && (form.provider === '__new_custom__' || form.provider.startsWith('custom-'))
   const current = view.providers.find(p => p.id === form.provider) || null
   const models = current ? current.models : []
   const change = (key, value) => setForm({ ...form, [key]: value })
   const pickProvider = (id) => {
+    if (id === '__new_custom__') {
+      setForm({ ...form, provider: '__new_custom__', label: '', baseUrl: '', model: '', apiKey: '', systemPrompt: form.systemPrompt })
+      setStatus({ phase: 'idle', text: '' })
+      return
+    }
     const p = view.providers.find(x => x.id === id) || null
     const remembered = view.keys && view.keys[id]
-    setForm({
-      ...form,
-      provider: id,
-      baseUrl: p ? p.baseUrl : form.baseUrl,
-      model: p ? p.models[0] : form.model,
-      apiKey: remembered || form.apiKey,
-    })
+    if (p) {
+      setForm({
+        ...form,
+        provider: id,
+        label: '',
+        baseUrl: p.baseUrl,
+        model: p.models[0],
+        apiKey: remembered || form.apiKey,
+      })
+    } else {
+      const c = view.customs.find(x => 'custom-' + x.id === id) || null
+      setForm({
+        ...form,
+        provider: id,
+        label: c ? (c.label || '自定义模型') : '',
+        baseUrl: c ? c.baseUrl : form.baseUrl,
+        model: c ? c.model : form.model,
+        apiKey: (c && c.apiKey) || remembered || form.apiKey,
+      })
+    }
     setStatus({ phase: 'idle', text: '' })
   }
   const runTest = async () => {
@@ -380,14 +409,56 @@ function ConfigDialog() {
         setStatus({ phase: 'error', text: (res && res.error) || '校验失败' })
         return
       }
-      await rpc('configSet', {
-        provider: form.provider,
-        baseUrl: form.baseUrl,
-        model: form.model,
-        apiKey: form.apiKey,
+      if (isCustomEntry) {
+        const cid = form.provider.startsWith('custom-') ? form.provider.slice('custom-'.length) : ''
+        const entry = await rpc('customSave', {
+          id: cid || undefined,
+          label: (form.label || '').trim() || '自定义模型',
+          baseUrl: form.baseUrl,
+          model: form.model,
+          apiKey: form.apiKey,
+        })
+        await rpc('configSet', {
+          provider: 'custom-' + entry.id,
+          baseUrl: form.baseUrl,
+          model: form.model,
+          apiKey: form.apiKey,
+          systemPrompt: form.systemPrompt,
+        })
+      } else {
+        await rpc('configSet', {
+          provider: form.provider,
+          baseUrl: form.baseUrl,
+          model: form.model,
+          apiKey: form.apiKey,
+          systemPrompt: form.systemPrompt,
+        })
+      }
+      close()
+    } catch (e) {
+      setStatus({ phase: 'error', text: String((e && e.message) || e) })
+    }
+  }
+  const removeCustom = async () => {
+    if (!(typeof form.provider === 'string' && form.provider.startsWith('custom-'))) return
+    const cid = form.provider.slice('custom-'.length)
+    try {
+      await rpc('customRemove', { id: cid })
+      const cfg = await rpc('configGet', {})
+      const customs = (cfg && cfg.customProviders) || []
+      const providers = (cfg && cfg.providers) || []
+      const keys = (cfg && cfg.keys) || {}
+      const first = providers[0] || null
+      setView({ ...view, customs })
+      setForm({
+        provider: first ? first.id : 'custom',
+        label: '',
+        baseUrl: first ? first.baseUrl : '',
+        model: first && first.models ? first.models[0] : '',
+        apiKey: (first && keys[first.id]) || '',
         systemPrompt: form.systemPrompt,
       })
-      close()
+      setStatus({ phase: 'ok', text: '已删除该自定义模型' })
     } catch (e) {
       setStatus({ phase: 'error', text: String((e && e.message) || e) })
     }
@@ -402,12 +473,24 @@ function ConfigDialog() {
       React.createElement('div', { className: 'dynv-dialog-title' }, '视觉识别配置'),
       React.createElement('div', { className: 'dynv-note' }, view.compatNote),
       React.createElement('label', { className: 'dynv-field' },
-        React.createElement('span', { className: 'dynv-field-label' }, '服务商（预设）'),
+        React.createElement('span', { className: 'dynv-field-label' }, '服务商'),
         React.createElement('select', { className: 'dynv-input', value: form.provider, onChange: (e) => pickProvider(e.target.value) },
           view.providers.map(p => React.createElement('option', { key: p.id, value: p.id }, p.label)),
-          React.createElement('option', { key: 'custom', value: 'custom' }, '自定义'),
+          view.customs.map(c => React.createElement('option', { key: 'custom-' + c.id, value: 'custom-' + c.id }, c.label + '（自定义）')),
+          React.createElement('option', { key: 'new', value: '__new_custom__' }, '＋ 新建自定义模型…'),
+          React.createElement('option', { key: 'custom', value: 'custom' }, '自定义（旧）'),
         ),
       ),
+      isCustomEntry ? React.createElement('label', { className: 'dynv-field' },
+        React.createElement('span', { className: 'dynv-field-label' }, '自定义名称'),
+        React.createElement('input', {
+          className: 'dynv-input',
+          type: 'text',
+          value: form.label || '',
+          onChange: (e) => change('label', e.target.value),
+          placeholder: '如：GLM-4.6V / 豆包 / Kimi',
+        }),
+      ) : null,
       React.createElement('label', { className: 'dynv-field' },
         React.createElement('span', { className: 'dynv-field-label' }, 'API Base URL'),
         React.createElement('input', {
@@ -440,7 +523,7 @@ function ConfigDialog() {
           placeholder: '输入 API Key（ModelScope 可带 ms- 前缀，自动去除）',
         }),
       ),
-      React.createElement('div', { className: 'dynv-note' }, current ? current.note : '自定义配置：手动填写 Base URL、模型名与 API Key。'),
+      React.createElement('div', { className: 'dynv-note' }, current ? current.note : '自定义配置：手动填写 Base URL、模型名与 API Key，可保存为命名条目。'),
       React.createElement('details', { className: 'dynv-details' },
         React.createElement('summary', null, '高级选项（系统提示词）'),
         React.createElement('textarea', { className: 'dynv-input', value: form.systemPrompt, onChange: (e) => change('systemPrompt', e.target.value) }),
@@ -449,6 +532,9 @@ function ConfigDialog() {
       React.createElement('div', { className: 'dynv-dialog-actions' },
         React.createElement('button', { className: 'dynv-btn', onClick: runTest, disabled: status.phase === 'testing' }, '测试连接'),
         React.createElement('button', { className: 'dynv-btn dynv-btn-primary', onClick: save, disabled: status.phase === 'testing' }, '保存'),
+        typeof form.provider === 'string' && form.provider.startsWith('custom-')
+          ? React.createElement('button', { className: 'dynv-btn dynv-danger', onClick: removeCustom, disabled: status.phase === 'testing' }, '删除')
+          : null,
         React.createElement('button', { className: 'dynv-btn', onClick: close }, '取消'),
       ),
     ),
@@ -483,6 +569,8 @@ module.exports = {
 .dynv-btn:disabled{opacity:.55;cursor:default}
 .dynv-btn-primary{color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary)}
 .dynv-btn-primary:hover{background:var(--dsw-alias-bg-layer-2)}
+.dynv-danger{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}
+.dynv-danger:hover{background:var(--dsw-alias-bg-layer-2)}
 .dynv-left{position:relative;display:inline-flex;align-items:center}
 .dynv-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.16);pointer-events:auto}
 .dynv-dialog{width:460px;max-width:92vw;padding:14px 16px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary);font-size:12px}

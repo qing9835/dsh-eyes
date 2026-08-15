@@ -46,6 +46,8 @@ export function apply(ctx) {
   // 配置持久化：密钥随模型保存，插件重启/升级后依然有效
   const CONFIG_FILE = '.vision-images/.config.json'
   let keys = {}
+  // 可命名的自定义模型条目：{ id, label, baseUrl, model, apiKey, systemPrompt? }
+  let customProviders = []
   let configLoaded = false
   let loadPromise = null
 
@@ -63,9 +65,14 @@ export function apply(ctx) {
         if (typeof data.config.maxTokens === 'number' && data.config.maxTokens > 0) config.maxTokens = data.config.maxTokens
       }
       if (data && typeof data.keys === 'object' && data.keys !== null) keys = data.keys
+      if (data && Array.isArray(data.customProviders)) {
+        customProviders = data.customProviders.filter(c => c && typeof c === 'object'
+          && typeof c.id === 'string' && typeof c.label === 'string'
+          && typeof c.baseUrl === 'string' && typeof c.model === 'string')
+      }
       if (!config.apiKey && keys[config.provider]) config.apiKey = keys[config.provider]
-      // 旧版本保存的 provider 已不存在时回退到自定义
-      if (!PROVIDERS.find(x => x.id === config.provider)) config.provider = 'custom'
+      // 旧版本保存的 provider 已不存在时回退到自定义（custom-xxx 由 customProviders 校验）
+      if (!PROVIDERS.find(x => x.id === config.provider) && !config.provider.startsWith('custom-')) config.provider = 'custom'
     } catch (e) { /* 无配置文件则使用默认配置 */ }
   }
   function ensureLoaded() {
@@ -78,7 +85,7 @@ export function apply(ctx) {
     if (fs === undefined) return
     try {
       const target = await fs.resolve(CONFIG_FILE, {})
-      await fs.writeText(target, JSON.stringify({ config: { ...config }, keys }))
+      await fs.writeText(target, JSON.stringify({ config: { ...config }, keys, customProviders }))
     } catch (e) { /* 持久化失败不影响主流程 */ }
   }
 
@@ -477,14 +484,32 @@ export function apply(ctx) {
   })
   route('configGet', async () => {
     await ensureLoaded()
-    return { config: { ...config }, providers: PROVIDERS, keys: { ...keys }, compatNote: COMPAT_NOTE }
+    return {
+      config: { ...config },
+      providers: PROVIDERS,
+      keys: { ...keys },
+      compatNote: COMPAT_NOTE,
+      customProviders: customProviders.map(c => ({ ...c })),
+    }
   })
   route('configSet', async (args) => {
     await ensureLoaded()
     const patch = args && typeof args === 'object' ? args : {}
     if (typeof patch.provider === 'string' && patch.provider.length > 0) {
       config.provider = patch.provider
-      if (keys[patch.provider]) config.apiKey = keys[patch.provider]
+      if (patch.provider.startsWith('custom-')) {
+        // 可命名自定义条目：从其条目同步 URL/模型/Key
+        const cp = customProviders.find(c => 'custom-' + c.id === patch.provider)
+        if (cp) {
+          config.baseUrl = cp.baseUrl
+          config.model = cp.model
+          if (cp.apiKey) { config.apiKey = cp.apiKey; keys[patch.provider] = cp.apiKey }
+        } else if (keys[patch.provider]) {
+          config.apiKey = keys[patch.provider]
+        }
+      } else if (keys[patch.provider]) {
+        config.apiKey = keys[patch.provider]
+      }
     }
     for (const k of ['baseUrl', 'model', 'systemPrompt']) {
       if (typeof patch[k] === 'string' && patch[k].length > 0) config[k] = patch[k]
@@ -497,6 +522,62 @@ export function apply(ctx) {
     config.maxTokens = p && p.id === 'modelscope' ? 8192 : 16384
     await persistConfig()
     return { ...config }
+  })
+  // 新建/更新可命名的自定义模型条目
+  route('customSave', async (args) => {
+    await ensureLoaded()
+    const label = String((args && args.label) || '').trim() || '自定义模型'
+    const baseUrl = String((args && args.baseUrl) || '').trim()
+    const model = String((args && args.model) || '').trim()
+    const apiKey = String((args && args.apiKey) || '').trim()
+    if (!baseUrl) throw new Error('请填写 API Base URL')
+    if (!model) throw new Error('请填写模型名')
+    let entry
+    const existingId = args && typeof args.id === 'string' && args.id ? args.id : ''
+    if (existingId) {
+      entry = customProviders.find(c => c.id === existingId)
+      if (!entry) throw new Error('自定义条目不存在（可能已被删除）')
+      entry.label = label
+      entry.baseUrl = baseUrl
+      entry.model = model
+      if (apiKey) entry.apiKey = apiKey
+    } else {
+      entry = {
+        id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        label,
+        baseUrl,
+        model,
+        apiKey,
+      }
+      customProviders.push(entry)
+    }
+    // 若当前激活的就是该条目，同步活动配置
+    if (config.provider === 'custom-' + entry.id) {
+      config.baseUrl = entry.baseUrl
+      config.model = entry.model
+      if (entry.apiKey) { config.apiKey = entry.apiKey; keys[config.provider] = entry.apiKey }
+    }
+    await persistConfig()
+    return { ...entry }
+  })
+  // 删除自定义模型条目
+  route('customRemove', async (args) => {
+    await ensureLoaded()
+    const id = args && typeof args.id === 'string' ? args.id : ''
+    const idx = customProviders.findIndex(c => c.id === id)
+    if (idx < 0) throw new Error('自定义条目不存在')
+    customProviders.splice(idx, 1)
+    delete keys['custom-' + id]
+    // 删除的是当前激活条目时，回退到第一个预设
+    if (config.provider === 'custom-' + id) {
+      const first = PROVIDERS[0]
+      config.provider = first.id
+      config.baseUrl = first.baseUrl
+      config.model = first.models[0]
+      config.apiKey = keys[first.id] || ''
+    }
+    await persistConfig()
+    return null
   })
   route('configValidate', async (args) => {
     const patch = args && typeof args === 'object' ? args : {}
