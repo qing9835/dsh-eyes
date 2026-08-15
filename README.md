@@ -14,6 +14,19 @@ DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识�
 
 ## 安装
 
+**从 GitHub 一键安装（推荐，公开仓库）：**
+
+```sh
+dsh plugin --profile web add github:qing9835/dsh-vision-bridge#v0.1.0
+```
+
+- 本包无构建步骤（index.js / client.js 均为成品），Git 安装无需 `allowBuilds` 授权；
+- 建议钉住 tag/SHA（如上 `#v0.1.0`），不要裸 `#main`；
+- 装完重启 DSH 自动生效（或把 `cordis.patch.yml` 里的行加入 `$DSH_HOME/cordis.patch.yml` 热激活）；
+- 首次使用请在配置弹窗填写自己的 API Key（默认无密钥）。
+
+**本地安装（开发）：**
+
 ```sh
 dsh plugin --profile web add ./dsh-vision-bridge
 ```
