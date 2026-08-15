@@ -13,7 +13,8 @@
     "index.js",
     "client.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "demo"
   ],
   "license": "MIT",
   "dsh": {
