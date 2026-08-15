@@ -1,5 +1,11 @@
 # dsh-vision-bridge
 
+<p align="center">
+  <img src="demo/01-source-photo.png" alt="dsh-vision-bridge 演示原图" width="820">
+  <br>
+  <em>为文本模型接入图片识别：粘贴 / 拖入 / 导入 → 视觉模型识别 → 文字自动进对话</em>
+</p>
+
 DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识别。粘贴/拖入/导入的图片被插件拦截 → 保存到 `<DSH 进程目录>/.vision-images/` → 交给 OpenAI 兼容视觉模型识别为文字 → 自动发送进对话；主模型可通过 `vision_ask` 工具复核追问（多轮）。输入框里的要求会随【我的要求 + 图片识别结果】一起发给主模型（方案 B）。
 
 由动态插件 vision-bridge（visex-1）转正：Host 半体逻辑一致，Client→Host RPC 改用 HTTP 路由（`/vision-bridge/*`），模型工具改用 `ctx.tools.register`。
@@ -58,15 +64,37 @@ dsh plugin --profile web add ./dsh-vision-bridge
 
 ## 演示
 
-完整演示流程（`demo/` 目录，点击查看大图）：
+完整演示流程：
 
-| 步骤 | 图片 |
-| --- | --- |
-| 1. 演示原图（古风女子雪景摄影） | ![demo-1](demo/01-source-photo.png) |
-| 2. 上传图片到 DSH 输入区 | ![demo-2](demo/02-upload-interface.png) |
-| 3. 配置弹窗（OpenAI 兼容接口） | ![demo-3](demo/03-config-dialog.png) |
-| 4. 识别结果自动发送进对话 | ![demo-4](demo/04-recognition-result.png) |
-| 5. 主模型通过 `vision_ask` 多轮追问细节 | ![demo-5](demo/05-vision-ask-followup.png) |
+<p align="center">
+  <img src="demo/01-source-photo.png" alt="演示原图：古风女子雪景摄影" width="820">
+  <br>
+  <em>① 演示原图（古风女子雪景摄影）</em>
+</p>
+
+<p align="center">
+  <img src="demo/02-upload-interface.png" alt="上传图片到 DSH 输入区" width="820">
+  <br>
+  <em>② 图片被插件拦截，出现在输入框上方的弹窗中（不进输入框），左下角为「导入图片」「配置」按钮</em>
+</p>
+
+<p align="center">
+  <img src="demo/03-config-dialog.png" alt="视觉识别配置弹窗" width="820">
+  <br>
+  <em>③ 配置弹窗：多提供商预设（OpenCode / ModelScope），均为 OpenAI 兼容接口，保存前自动校验</em>
+</p>
+
+<p align="center">
+  <img src="demo/04-recognition-result.png" alt="识别结果自动发送进对话" width="820">
+  <br>
+  <em>④ 回车后视觉模型识别为文字，自动发送进对话（主模型可直接基于它继续工作）</em>
+</p>
+
+<p align="center">
+  <img src="demo/05-vision-ask-followup.png" alt="vision_ask 多轮追问" width="820">
+  <br>
+  <em>⑤ 主模型通过 vision_ask 工具对局部细节（护额、额饰、耳饰等）多轮追问，视觉模型逐项精确回答</em>
+</p>
 
 ## 重建 client.js
 
