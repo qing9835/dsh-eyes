@@ -335,7 +335,8 @@ function ConfigDialog() {
             apiKey: matchedCustom.apiKey || cfg.apiKey || '',
             systemPrompt: matchedCustom.systemPrompt || cfg.systemPrompt || '',
           } : {
-            provider: matched ? matched.id : 'custom',
+            // 预设未命中（含旧版裸 'custom' 配置）：进入"新建自定义"表单并预填
+            provider: matched ? matched.id : '__new_custom__',
             label: '',
             baseUrl: cfg.baseUrl || '',
             model: cfg.model || '',
@@ -345,7 +346,7 @@ function ConfigDialog() {
         })
         .catch(() => {
           setView({ providers: [], keys: {}, compatNote: '', customs: [] })
-          setForm({ provider: 'custom', label: '', baseUrl: '', model: '', apiKey: '', systemPrompt: '' })
+          setForm({ provider: '__new_custom__', label: '', baseUrl: '', model: '', apiKey: '', systemPrompt: '' })
         })
     }
   }, [store.configOpen, view])
@@ -451,7 +452,7 @@ function ConfigDialog() {
       const first = providers[0] || null
       setView({ ...view, customs })
       setForm({
-        provider: first ? first.id : 'custom',
+        provider: first ? first.id : '__new_custom__',
         label: '',
         baseUrl: first ? first.baseUrl : '',
         model: first && first.models ? first.models[0] : '',
@@ -478,7 +479,6 @@ function ConfigDialog() {
           view.providers.map(p => React.createElement('option', { key: p.id, value: p.id }, p.label)),
           view.customs.map(c => React.createElement('option', { key: 'custom-' + c.id, value: 'custom-' + c.id }, c.label + '（自定义）')),
           React.createElement('option', { key: 'new', value: '__new_custom__' }, '＋ 新建自定义模型…'),
-          React.createElement('option', { key: 'custom', value: 'custom' }, '自定义（旧）'),
         ),
       ),
       isCustomEntry ? React.createElement('label', { className: 'dynv-field' },
