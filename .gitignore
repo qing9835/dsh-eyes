@@ -1,0 +1,11 @@
+# 依赖与构建产物
+node_modules/
+lib/
+
+# 本地运行数据（图片、会话历史、配置/密钥）——绝不上传
+.vision-images/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log

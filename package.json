@@ -1,0 +1,30 @@
+{
+  "name": "dsh-vision-bridge",
+  "version": "0.1.0",
+  "description": "Vision bridge: 拦截粘贴/拖入/导入的图片，交给 OpenAI 兼容视觉模型识别为文字并自动发送进对话；主模型可通过 vision_ask 工具复核追问。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  }
+}
