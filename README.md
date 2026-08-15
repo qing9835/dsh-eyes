@@ -1,7 +1,7 @@
 # dsh-vision-bridge
 
 <p align="center">
-  <img src="demo/01-source-photo.png" alt="dsh-vision-bridge 演示原图" width="820">
+  <img src="demo/01-source-photo.jpg" alt="dsh-vision-bridge 演示原图" width="820">
   <br>
   <em>为文本模型接入图片识别：粘贴 / 拖入 / 导入 → 视觉模型识别 → 文字自动进对话</em>
 </p>
@@ -67,7 +67,7 @@ dsh plugin --profile web add ./dsh-vision-bridge
 完整演示流程：
 
 <p align="center">
-  <img src="demo/01-source-photo.png" alt="演示原图：古风女子雪景摄影" width="820">
+  <img src="demo/01-source-photo.jpg" alt="演示原图：古风女子雪景摄影" width="820">
   <br>
   <em>① 演示原图（古风女子雪景摄影）</em>
 </p>
