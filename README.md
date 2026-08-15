@@ -1,9 +1,9 @@
 # dsh-vision-bridge
 
 <p align="center">
-  <img src="demo/01-source-photo.jpg" alt="dsh-vision-bridge 演示原图" width="820">
+  <img src="demo/00-main-interface.png" alt="dsh-vision-bridge 在 DeepSeek Harness 中的集成界面" width="820">
   <br>
-  <em>为文本模型接入图片识别：粘贴 / 拖入 / 导入 → 视觉模型识别 → 文字自动进对话</em>
+  <em>在 DeepSeek Harness 中：同时上传 6 张图片，回车即可识别并自动发送进对话</em>
 </p>
 
 DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识别。粘贴/拖入/导入的图片被插件拦截 → 保存到 `<DSH 进程目录>/.vision-images/` → 交给 OpenAI 兼容视觉模型识别为文字 → 自动发送进对话；主模型可通过 `vision_ask` 工具复核追问（多轮）。输入框里的要求会随【我的要求 + 图片识别结果】一起发给主模型（方案 B）。
