@@ -3,6 +3,9 @@
 //   Client→Host RPC 改为 HTTP 路由（/vision-bridge/*，webServer 注册）
 //   模型工具改用 ctx.tools.register（手写 ToolDefinition，无外部依赖）
 export const name = 'dsh-vision-bridge'
+// 硬依赖：等 webServer（HTTP RPC 路由）与 tools（vision_ask 注册）就绪后再 apply。
+// 无 inject 时冷启动激活过早，两个服务尚不可用，路由与工具会静默缺失。
+export const inject = ['webServer', 'tools']
 
 export function apply(ctx) {
   const config = {
