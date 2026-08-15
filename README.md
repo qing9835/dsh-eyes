@@ -1,4 +1,4 @@
-# dsh-vision-bridge
+# dsh-vision-bridge，给deepseek外置视觉模型，鲸鱼开眼
 
 <p align="center">
   <img src="demo/00-main-interface.png" alt="dsh-vision-bridge 在 DeepSeek Harness 中的集成界面" width="820">
