@@ -89,9 +89,31 @@ export function apply(ctx) {
     } catch (e) { /* 持久化失败不影响主流程 */ }
   }
 
-  function touchRecent(ids) {
+  // 全局最近图片池：{ id, sid, ts }。sid 记录图片来源会话，跨会话兜底时优先取同会话图片
+  let recentPool = []
+  function touchRecent(ids, sid) {
     if (!Array.isArray(ids) || ids.length === 0) return
-    recentIds = [...recentIds.filter(id => !ids.includes(id)), ...ids].slice(-MAX_IMAGES)
+    const now = Date.now()
+    const seen = new Set(ids)
+    recentPool = [
+      ...recentPool.filter(e => !seen.has(e.id)),
+      ...ids.map((id, i) => ({ id, sid: sid || 'global', ts: now + i })),
+    ].slice(-MAX_IMAGES * 2)
+    recentIds = recentPool.map(e => e.id)
+  }
+
+  // 内容去重：同一张图（相同 dataUrl）复用同一 ID，避免重复粘贴生成新 ID 导致轮次错位
+  const dataUrlIndex = new Map()
+  function imageIdFor(dataUrl, ext) {
+    const existing = dataUrlIndex.get(dataUrl)
+    if (existing) return existing
+    const id = 'vis-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext
+    dataUrlIndex.set(dataUrl, id)
+    if (dataUrlIndex.size > 500) {
+      const first = dataUrlIndex.keys().next().value
+      dataUrlIndex.delete(first)
+    }
+    return id
   }
 
   const fsProbe = () => {
@@ -443,8 +465,12 @@ export function apply(ctx) {
       } else if (ref && typeof ref.path === 'string') {
         // 本地图片文件（绝对/相对路径）：读取后注册进插件索引，多轮追问可省略参数自动复用
         const loaded = await dataUrlFromPath(ref.path)
-        const id = 'vis-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + loaded.ext
-        await writeImage(id, loaded.dataUrl)
+        let id = dataUrlIndex.get(loaded.dataUrl)
+        if (!id) {
+          id = 'vis-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + loaded.ext
+          dataUrlIndex.set(loaded.dataUrl, id)
+          await writeImage(id, loaded.dataUrl)
+        }
         dataUrl = loaded.dataUrl
         usedIds.push(id)
       } else if (ref && typeof ref.dataUrl === 'string') {
@@ -455,7 +481,10 @@ export function apply(ctx) {
       }
     }
     if (!explicit && userContent.length === 0) {
-      for (const id of pool) {
+      // 兜底取图：同会话最近图片优先（最新在后）；同会话无图时取全局最近
+      const mine = recentPool.filter(e => e.sid === sid).map(e => e.id)
+      const candidates = (mine.length > 0 ? mine : recentIds).slice(-MAX_IMAGES)
+      for (const id of candidates) {
         try {
           const dataUrl = await readImage(id)
           if (dataUrl.startsWith('data:')) {
@@ -492,7 +521,7 @@ export function apply(ctx) {
     ]).slice(-12)
     if (usedIds.length > 0) {
       st.lastImageIds = usedIds
-      touchRecent(usedIds)
+      touchRecent(usedIds, sid)
     }
     rounds.set(sid, st)
     saveMeta(sid, st)
@@ -524,16 +553,18 @@ export function apply(ctx) {
 
   route('save', async (args) => {
     const images = Array.isArray(args && args.images) ? args.images : []
+    const sid = args && typeof args.sessionId === 'string' ? args.sessionId : ''
     const out = []
     for (const img of images) {
       if (!img || typeof img.dataUrl !== 'string' || !img.dataUrl.startsWith('data:')) continue
       const ext = extOf(img.name)
-      const id = 'vis-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext
-      await writeImage(id, img.dataUrl)
+      const existing = dataUrlIndex.get(img.dataUrl)
+      const id = existing || imageIdFor(img.dataUrl, ext)
+      if (!existing) await writeImage(id, img.dataUrl)
       out.push({ id, name: img.name || id })
     }
     if (out.length === 0) throw new Error('没有可保存的图片')
-    touchRecent(out.map(it => it.id))
+    touchRecent(out.map(it => it.id), sid)
     return { images: out }
   })
   route('configGet', async () => {
@@ -710,7 +741,11 @@ export function apply(ctx) {
       },
       async execute(args, exec) {
         const agent = exec && exec.agent
-        const sid = (agent && agent.sessionId) || 'default'
+        // 工具侧会话 ID：优先 agent.session.header.id（与客户端 props.sessionId 一致，保证
+        // 多轮追问读写与用户粘贴同一份会话历史）；agent.sessionId 不存在时兜底。
+        const sid = (agent && agent.session && agent.session.header && agent.session.header.id)
+          || (agent && typeof agent.sessionId === 'string' && agent.sessionId)
+          || 'default'
         const refs = []
         // 兼容字符串与对象两种入参
         for (const img of Array.isArray(args.images) ? args.images : []) {

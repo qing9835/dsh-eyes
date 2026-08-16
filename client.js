@@ -76,11 +76,14 @@ function saveToHost(sid, items) {
   if (batch.length === 0) return
   st.busy = true
   notify()
-  rpc('save', { images: batch.map(it => ({ dataUrl: it.dataUrl, name: it.name })) })
+  rpc('save', { images: batch.map(it => ({ dataUrl: it.dataUrl, name: it.name })), sessionId: sid })
     .then(saved => {
       const byId = {}
       ;(saved.images || []).forEach((it, i) => { byId[it.id] = batch[i] })
-      st.images = st.images.concat((saved.images || []).map(it => ({
+      // 服务端按内容去重后可能返回已存在的 id，本地按 id 去重避免重复缩略图
+      const existing = new Set(st.images.map(i => i.id))
+      const fresh = (saved.images || []).filter(it => !existing.has(it.id))
+      st.images = st.images.concat(fresh.map(it => ({
         id: it.id,
         dataUrl: (byId[it.id] && byId[it.id].dataUrl) || '',
         name: it.name,
