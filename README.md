@@ -16,13 +16,25 @@
 
 DSH 静态插件（bundle）：为无视觉能力的文本模型提供图片识别。粘贴/拖入/导入的图片被插件拦截 → 保存到 `<DSH 进程目录>/.vision-images/` → 交给 OpenAI 兼容视觉模型识别为文字 → 自动发送进对话；主模型可通过 `vision_ask` 工具复核追问（多轮）。输入框里的要求会随【我的要求 + 图片识别结果】一起发给主模型（方案 B）。
 
+识别**你自己生成的本地图片**（PDF 渲染/提取的图表、网页截图、本地文件等）时，直接调用 `vision_ask` 并传入 `paths` 参数（绝对或相对路径），插件自动读取并注册进图片索引，之后的多轮追问无需重复传参。
+
 由动态插件 vision-bridge（visex-1）转正：Host 半体逻辑一致，Client→Host RPC 改用 HTTP 路由（`/vision-bridge/*`），模型工具改用 `ctx.tools.register`。
+
+## 功能特性
+
+- **图片拦截不进输入框**：粘贴 / 拖入 / 导入图片 → 弹窗显示缩略图（与 UI 主题一致），按 **Enter** 即识别并自动发送
+- **多图并行识别**：一次最多 9 张
+- **方案 B 发送**：识别成功后把【我的要求 + 图片识别结果】一起发给主模型
+- **多轮复核**：主模型通过 `vision_ask` 工具自主判断是否追问、追问什么，视觉模型基于历史逐轮修正
+- **本地文件直读（paths）**：`vision_ask` 支持 `paths` 参数传入任意本地图片文件（绝对或相对路径，相对路径基于 DSH 进程工作目录；支持 png/jpg/gif/webp/bmp/avif，单文件 ≤ 20MB）——PDF 渲染图表、网页截图等 Agent 自产图片也能识别；读取后自动注册进图片索引，之后的多轮追问无需重复传参
+- **多提供商 + 命名自定义模型**：OpenCode（3 模型）/ ModelScope（3 模型）/ 任意多个命名自定义模型（如 GLM-4.6V），全部 OpenAI 兼容，保存前自动校验连接
+- **配置与密钥持久化**：每个提供商独立记忆 Key，插件重启/升级不丢
 
 ## 文件
 
 | 文件 | 内容 |
 | --- | --- |
-| `index.js` | Host 半体（图片落盘、配置持久化、HTTP 路由、`vision_ask` 工具注册、系统提示词段） |
+| `index.js` | Host 半体（图片落盘、配置持久化、HTTP 路由、`vision_ask` 工具注册（含 `paths` 本地文件直读）、系统提示词段） |
 | `client.js` | 浏览器 bundle（`window.__ModuleLoader__.load` closure-factory 格式，手构建，无外部依赖） |
 | `cordis.patch.yml` | 插入一行 `vision-bridge`（name: dsh-vision-bridge） |
 
