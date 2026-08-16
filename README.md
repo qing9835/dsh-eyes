@@ -40,6 +40,10 @@ dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0
 
 两种写法是同一个 CLI，任选其一即可。
 
+> 💡 **Windows PowerShell 用户注意**：若 `npx` 报 `npx.ps1 cannot be loaded ... not digitally signed`，是系统执行策略拦截脚本。二选一解决：
+> 1. 用 `npx.cmd` 代替 `npx`（如 `npx.cmd @deepseek-ai/dsh plugin --profile web add github:qing9835/dsh-eyes#v0.1.0`）；
+> 2. 执行一次 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（Node 官方推荐，之后 `npx` 即可正常使用）。
+
 - 本包无构建步骤（index.js / client.js 均为成品），Git 安装无需 `allowBuilds` 授权；
 - 建议钉住 tag/SHA（如上 `#v0.1.0`），不要裸 `#main`；
 - 装完**重启 DSH** 自动生效，然后刷新浏览器页面；
