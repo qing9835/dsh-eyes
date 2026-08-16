@@ -114,6 +114,7 @@ export function apply(ctx) {
         return '## 视觉图片识别规则（vision-bridge）\n'
           + '本会话用户粘贴/拖入/导入的图片会被插件自动保存并经当前配置的视觉模型（OpenAI 兼容接口）识别为文字作为消息进入对话，图片本身不会直接出现在对话中。\n'
           + '- 图片由插件自动管理，你【不需要查找图片文件】：调用 vision_ask 工具时省略 images 参数即可自动取回本会话最近识别的图片（若会话索引缺失则自动使用最近保存的图片，插件重启后依然有效）。图片保存在：' + dir + '（文件名即图片 ID，仅当需要指定某张图时才用）。\n'
+          + '- 需要识别**你自己生成或引用的本地图片文件**（如 PDF 渲染/提取的图表、网页截图、本地文件）时，调用 vision_ask 并传入 paths 参数（绝对或相对路径，相对路径基于 DSH 进程工作目录；支持 png/jpg/gif/webp/bmp/avif，单文件 ≤20MB）；插件会自动读取并注册进图片索引，之后的多轮追问无需重复传参。\n'
           + '- 对话中的图片描述文本即视觉模型对该图的识别结果，直接基于它作答。\n'
           + '- 当对话中收到图片识别结果时，先评估它是否满足当前任务需要的信息（文字原文、数值、布局、局部细节等）。信息不足、结果模糊或需要更精确内容时，主动调用 vision_ask 工具与视觉模型继续对话追问，可多次调用；每轮基于上一轮回答继续修正，直到信息足够或视觉模型确认无法提供。\n'
           + '- 追问要具体（例如：重新识别并完整转写图中文字 / 放大看左上角写的什么 / 把第二张图的布局描述清楚）。\n'
@@ -150,6 +151,51 @@ export function apply(ctx) {
   function extOf(name) {
     const m = /\.([a-z0-9]+)$/i.exec(name || '')
     return m ? m[1].toLowerCase() : 'png'
+  }
+
+  // 探测图片 MIME：优先按扩展名，未知扩展名时按文件魔数
+  function mimeOf(path, bytes) {
+    const ext = extOf(path)
+    if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+    if (ext === 'png' || ext === 'gif' || ext === 'webp' || ext === 'bmp' || ext === 'avif') return 'image/' + ext
+    if (bytes && bytes.length >= 12) {
+      if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png'
+      if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return 'image/gif'
+      if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp'
+      if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+        && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp'
+    }
+    return ''
+  }
+
+  // 从任意本地图片文件（绝对/相对路径）读取并转 data URL；上限 20MB
+  async function dataUrlFromPath(path) {
+    const fs = ctx.get('fs')
+    if (fs === undefined) throw new Error('fs 服务不可用，无法读取本地图片文件')
+    let target
+    try {
+      target = await fs.resolve(String(path), {})
+    } catch (e) {
+      throw new Error('无法解析图片路径: ' + path)
+    }
+    let bytes
+    try {
+      bytes = await fs.readBytes(target, undefined, 20 * 1024 * 1024)
+    } catch (e) {
+      const code = e && e.code
+      if (code === 'FS_NOT_FOUND') throw new Error('图片文件不存在: ' + path)
+      if (code === 'FS_TOO_LARGE') throw new Error('图片文件超过 20MB 上限: ' + path)
+      if (code === 'FS_NOT_REGULAR_FILE') throw new Error('路径不是文件（可能是目录）: ' + path)
+      throw new Error('读取图片失败 (' + path + '): ' + String((e && e.message) || e))
+    }
+    if (bytes.length === 0) throw new Error('图片文件为空: ' + path)
+    const mime = mimeOf(String(path), bytes)
+    if (!mime) throw new Error('不支持的文件格式（支持 png/jpg/gif/webp/bmp/avif）: ' + path)
+    return {
+      dataUrl: 'data:' + mime + ';base64,' + bytesToBase64(bytes),
+      ext: mime === 'image/jpeg' ? 'jpg' : mime.slice('image/'.length),
+    }
   }
 
   async function writeImage(id, dataUrl) {
@@ -393,6 +439,13 @@ export function apply(ctx) {
           dataUrl = await readImage(ref.id)
           usedIds.push(ref.id)
         }
+      } else if (ref && typeof ref.path === 'string') {
+        // 本地图片文件（绝对/相对路径）：读取后注册进插件索引，多轮追问可省略参数自动复用
+        const loaded = await dataUrlFromPath(ref.path)
+        const id = 'vis-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + loaded.ext
+        await writeImage(id, loaded.dataUrl)
+        dataUrl = loaded.dataUrl
+        usedIds.push(id)
       } else if (ref && typeof ref.dataUrl === 'string') {
         dataUrl = ref.dataUrl
       }
@@ -624,9 +677,11 @@ export function apply(ctx) {
   route('ask', async (args) => {
     await ensureLoaded()
     const sid = args && typeof args.sessionId === 'string' ? args.sessionId : 'default'
-    const images = Array.isArray(args && args.images) ? args.images : []
+    const refs = []
+    for (const id of Array.isArray(args && args.images) ? args.images : []) refs.push({ id: String(id) })
+    for (const p of Array.isArray(args && args.paths) ? args.paths : []) refs.push({ path: String(p) })
     const prompt = typeof (args && args.prompt) === 'string' ? args.prompt : ''
-    return askVision(sid, prompt, images)
+    return askVision(sid, prompt, refs)
   })
 
   // ---- 模型工具（与动态版 vision_ask 等价；parameters 为编译后 JSON Schema）----
@@ -634,12 +689,13 @@ export function apply(ctx) {
   if (tools !== undefined) {
     ctx.effect(() => tools.register({
       name: 'vision_ask',
-      description: '与当前配置的视觉模型（OpenAI 兼容接口）对话，询问本会话图片的内容。本会话用户粘贴/拖入/导入的图片已被插件自动保存，你【不需要查找图片文件】：省略 images 参数时插件自动取回本会话最近识别的图片（若会话索引缺失则自动使用最近保存的图片，插件重启后依然有效）并携带与视觉模型的全部历史对话。当你评估认为识别结果信息不足、模糊、缺字漏细节，或需要就图片内容进一步提问时，调用本工具与视觉模型继续对话；可多次调用，每轮基于上一轮回答继续修正，直到信息足够或视觉模型确认无法提供。返回视觉模型的文字回答。',
+      description: '与当前配置的视觉模型（OpenAI 兼容接口）对话，询问图片内容。本会话用户粘贴/拖入/导入的图片已被插件自动保存，你【不需要查找图片文件】：省略 images 参数时插件自动取回本会话最近识别的图片（若会话索引缺失则自动使用最近保存的图片，插件重启后依然有效）并携带与视觉模型的全部历史对话。需要识别你自己生成/引用的本地图片文件（如 PDF 渲染/提取的图表、网页截图、本地文件）时，用 paths 参数传入文件路径（绝对或相对路径，相对路径基于 DSH 进程工作目录解析；支持 png/jpg/gif/webp/bmp/avif，单文件上限 20MB），插件会自动读取并注册进图片索引，之后的多轮追问无需重复传参。当你评估认为识别结果信息不足、模糊、缺字漏细节，或需要就图片内容进一步提问时，调用本工具与视觉模型继续对话；可多次调用，每轮基于上一轮回答继续修正，直到信息足够或视觉模型确认无法提供。返回视觉模型的文字回答。',
       parameters: {
         type: 'object',
         properties: {
           prompt: { type: 'string', description: '本次询问内容，例如：重新识别并输出完整文字描述 / 放大看图片左上角是什么 / 总结图片中的要点' },
           images: { type: 'array', items: { type: 'string' }, description: '可选的图片序号或 ID 列表（如 ["0"] 指最近保存图片的第一张）；省略则自动取回最近保存的图片' },
+          paths: { type: 'array', items: { type: 'string' }, description: '可选的本地图片文件路径列表（绝对路径或相对路径，相对路径基于 DSH 进程工作目录；支持 png/jpg/gif/webp/bmp/avif，单文件 ≤20MB）。用于识别你自己生成或引用的图片（PDF 渲染图、网页截图、本地文件等）；插件读取后自动注册进图片索引，多轮追问可省略本参数复用' },
         },
         required: ['prompt'],
       },
@@ -651,6 +707,7 @@ export function apply(ctx) {
         const agent = exec && exec.agent
         const sid = (agent && agent.sessionId) || 'default'
         const refs = Array.isArray(args.images) ? args.images.map(id => ({ id: String(id) })) : []
+        for (const p of Array.isArray(args.paths) ? args.paths : []) refs.push({ path: String(p) })
         const res = await askVision(sid, args.prompt || '', refs)
         return res.text
       },
