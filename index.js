@@ -208,6 +208,7 @@ export function apply(ctx) {
   async function readImage(id) {
     const fs = ctx.get('fs')
     if (fs === undefined) throw new Error('fs 服务不可用，无法读取图片')
+    if (typeof id !== 'string' || id.length === 0) throw new Error('无效的图片 ID（应为字符串）')
     const target = await fs.resolve('.vision-images/' + id, {})
     return fs.readText(target)
   }
@@ -678,7 +679,11 @@ export function apply(ctx) {
     await ensureLoaded()
     const sid = args && typeof args.sessionId === 'string' ? args.sessionId : 'default'
     const refs = []
-    for (const id of Array.isArray(args && args.images) ? args.images : []) refs.push({ id: String(id) })
+    // 兼容两种入参：字符串数组（"0"/ID）与对象数组（[{id,name}]，客户端 UI 的格式）
+    for (const img of Array.isArray(args && args.images) ? args.images : []) {
+      if (img && typeof img === 'object') refs.push({ id: String(img.id || '') })
+      else refs.push({ id: String(img) })
+    }
     for (const p of Array.isArray(args && args.paths) ? args.paths : []) refs.push({ path: String(p) })
     const prompt = typeof (args && args.prompt) === 'string' ? args.prompt : ''
     return askVision(sid, prompt, refs)
@@ -706,7 +711,12 @@ export function apply(ctx) {
       async execute(args, exec) {
         const agent = exec && exec.agent
         const sid = (agent && agent.sessionId) || 'default'
-        const refs = Array.isArray(args.images) ? args.images.map(id => ({ id: String(id) })) : []
+        const refs = []
+        // 兼容字符串与对象两种入参
+        for (const img of Array.isArray(args.images) ? args.images : []) {
+          if (img && typeof img === 'object') refs.push({ id: String(img.id || '') })
+          else refs.push({ id: String(img) })
+        }
         for (const p of Array.isArray(args.paths) ? args.paths : []) refs.push({ path: String(p) })
         const res = await askVision(sid, args.prompt || '', refs)
         return res.text
